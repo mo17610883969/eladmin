@@ -56,8 +56,7 @@ public class AppServiceImpl implements AppService {
 
     @Override
     public AppDto findById(Long id) {
-        App app = appRepository.findById(id).orElseGet(App::new);
-        ValidationUtil.isNull(app.getId(),"App","id",id);
+        App app = ValidationUtil.getByIdOrThrow(appRepository, id, "App", App::new);
         return appMapper.toDto(app);
     }
 
@@ -82,8 +81,7 @@ public class AppServiceImpl implements AppService {
             throw new IllegalArgumentException("非法的应用名称，请勿包含[; | &]等特殊字符");
         }
         verification(resources);
-        App app = appRepository.findById(resources.getId()).orElseGet(App::new);
-        ValidationUtil.isNull(app.getId(),"App","id",resources.getId());
+        App app = ValidationUtil.getByIdOrThrow(appRepository, resources.getId(), "App", App::new);
         app.copy(resources);
         appRepository.save(app);
     }

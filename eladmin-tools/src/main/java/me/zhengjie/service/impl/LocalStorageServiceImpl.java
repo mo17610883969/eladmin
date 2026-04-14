@@ -64,8 +64,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
 
     @Override
     public LocalStorageDto findById(Long id){
-        LocalStorage localStorage = localStorageRepository.findById(id).orElseGet(LocalStorage::new);
-        ValidationUtil.isNull(localStorage.getId(),"LocalStorage","id",id);
+        LocalStorage localStorage = ValidationUtil.getByIdOrThrow(localStorageRepository, id, "LocalStorage", LocalStorage::new);
         return localStorageMapper.toDto(localStorage);
     }
 
@@ -99,8 +98,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(LocalStorage resources) {
-        LocalStorage localStorage = localStorageRepository.findById(resources.getId()).orElseGet(LocalStorage::new);
-        ValidationUtil.isNull( localStorage.getId(),"LocalStorage","id",resources.getId());
+        LocalStorage localStorage = ValidationUtil.getByIdOrThrow(localStorageRepository, resources.getId(), "LocalStorage", LocalStorage::new);
         localStorage.copy(resources);
         localStorageRepository.save(localStorage);
     }

@@ -59,8 +59,7 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     @Override
     public DatabaseDto findById(String id) {
-        Database database = databaseRepository.findById(id).orElseGet(Database::new);
-        ValidationUtil.isNull(database.getId(),"Database","id",id);
+        Database database = ValidationUtil.getByIdOrThrow(databaseRepository, id, "Database", Database::new);
         return databaseMapper.toDto(database);
     }
 
@@ -74,8 +73,7 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Database resources) {
-        Database database = databaseRepository.findById(resources.getId()).orElseGet(Database::new);
-        ValidationUtil.isNull(database.getId(),"Database","id",resources.getId());
+        Database database = ValidationUtil.getByIdOrThrow(databaseRepository, resources.getId(), "Database", Database::new);
         database.copy(resources);
         databaseRepository.save(database);
     }

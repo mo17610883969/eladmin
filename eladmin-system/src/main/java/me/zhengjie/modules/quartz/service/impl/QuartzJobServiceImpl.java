@@ -70,9 +70,7 @@ public class QuartzJobServiceImpl implements QuartzJobService {
 
     @Override
     public QuartzJob findById(Long id) {
-        QuartzJob quartzJob = quartzJobRepository.findById(id).orElseGet(QuartzJob::new);
-        ValidationUtil.isNull(quartzJob.getId(),"QuartzJob","id",id);
-        return quartzJob;
+        return ValidationUtil.getByIdOrThrow(quartzJobRepository, id, "QuartzJob", QuartzJob::new);
     }
 
     @Override

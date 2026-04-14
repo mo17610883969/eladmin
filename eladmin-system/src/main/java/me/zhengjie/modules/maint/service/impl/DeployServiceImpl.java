@@ -80,8 +80,7 @@ public class DeployServiceImpl implements DeployService {
 
 	@Override
 	public DeployDto findById(Long id) {
-		Deploy deploy = deployRepository.findById(id).orElseGet(Deploy::new);
-		ValidationUtil.isNull(deploy.getId(), "Deploy", "id", id);
+		Deploy deploy = ValidationUtil.getByIdOrThrow(deployRepository, id, "Deploy", Deploy::new);
 		return deployMapper.toDto(deploy);
 	}
 
@@ -94,8 +93,7 @@ public class DeployServiceImpl implements DeployService {
 	@Override
 	@Transactional(rollbackFor = Exception.class)
 	public void update(Deploy resources) {
-		Deploy deploy = deployRepository.findById(resources.getId()).orElseGet(Deploy::new);
-		ValidationUtil.isNull(deploy.getId(), "Deploy", "id", resources.getId());
+		Deploy deploy = ValidationUtil.getByIdOrThrow(deployRepository, resources.getId(), "Deploy", Deploy::new);
 		deploy.copy(resources);
 		deployRepository.save(deploy);
 	}

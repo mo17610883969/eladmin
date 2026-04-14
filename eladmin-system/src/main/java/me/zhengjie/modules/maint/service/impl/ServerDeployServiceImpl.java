@@ -56,8 +56,7 @@ public class ServerDeployServiceImpl implements ServerDeployService {
 
     @Override
     public ServerDeployDto findById(Long id) {
-        ServerDeploy server = serverDeployRepository.findById(id).orElseGet(ServerDeploy::new);
-        ValidationUtil.isNull(server.getId(),"ServerDeploy","id",id);
+        ServerDeploy server = ValidationUtil.getByIdOrThrow(serverDeployRepository, id, "ServerDeploy", ServerDeploy::new);
         return serverDeployMapper.toDto(server);
     }
 
@@ -91,8 +90,7 @@ public class ServerDeployServiceImpl implements ServerDeployService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(ServerDeploy resources) {
-        ServerDeploy serverDeploy = serverDeployRepository.findById(resources.getId()).orElseGet(ServerDeploy::new);
-        ValidationUtil.isNull( serverDeploy.getId(),"ServerDeploy","id",resources.getId());
+        ServerDeploy serverDeploy = ValidationUtil.getByIdOrThrow(serverDeployRepository, resources.getId(), "ServerDeploy", ServerDeploy::new);
         serverDeploy.copy(resources);
         serverDeployRepository.save(serverDeploy);
     }

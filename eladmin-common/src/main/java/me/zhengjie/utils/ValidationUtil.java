@@ -18,6 +18,10 @@ package me.zhengjie.utils;
 import cn.hutool.core.lang.Validator;
 import cn.hutool.core.util.ObjectUtil;
 import me.zhengjie.exception.BadRequestException;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.lang.reflect.Method;
+import java.util.function.Supplier;
 
 /**
  * 验证工具
@@ -35,6 +39,28 @@ public class ValidationUtil {
             String msg = entity + " 不存在: "+ parameter +" is "+ value;
             throw new BadRequestException(msg);
         }
+    }
+
+    /**
+     * 验证实体是否存在
+     */
+    public static void checkEntityExists(Object entityId, String entityName, Object id) {
+        isNull(entityId, entityName, "id", id);
+    }
+
+    /**
+     * 通过ID查找并验证实体
+     */
+    public static <T, ID> T getByIdOrThrow(JpaRepository<T, ID> repository, ID id, String entityName, Supplier<T> newInstanceSupplier) {
+        T entity = repository.findById(id).orElseGet(newInstanceSupplier);
+        try {
+            Method getIdMethod = entity.getClass().getMethod("getId");
+            Object entityId = getIdMethod.invoke(entity);
+            checkEntityExists(entityId, entityName, id);
+        } catch (Exception e) {
+            throw new BadRequestException(entityName + " 不存在: id is " + id);
+        }
+        return entity;
     }
 
   /**

@@ -69,8 +69,7 @@ public class DictServiceImpl implements DictService {
     public void update(Dict resources) {
         // 清理缓存
         delCaches(resources);
-        Dict dict = dictRepository.findById(resources.getId()).orElseGet(Dict::new);
-        ValidationUtil.isNull( dict.getId(),"Dict","id",resources.getId());
+        Dict dict = ValidationUtil.getByIdOrThrow(dictRepository, resources.getId(), "Dict", Dict::new);
         dict.setName(resources.getName());
         dict.setDescription(resources.getDescription());
         dictRepository.save(dict);

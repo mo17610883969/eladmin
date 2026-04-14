@@ -163,8 +163,7 @@ public class SysLogServiceImpl implements SysLogService {
 
     @Override
     public Object findByErrDetail(Long id) {
-        SysLog sysLog = logRepository.findById(id).orElseGet(SysLog::new);
-        ValidationUtil.isNull(sysLog.getId(), "Log", "id", id);
+        SysLog sysLog = ValidationUtil.getByIdOrThrow(logRepository, id, "Log", SysLog::new);
         byte[] details = sysLog.getExceptionDetail();
         return Dict.create().set("exception", new String(ObjectUtil.isNotNull(details) ? details : "".getBytes()));
     }

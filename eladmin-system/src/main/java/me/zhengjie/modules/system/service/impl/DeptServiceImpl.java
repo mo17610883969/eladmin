@@ -91,8 +91,7 @@ public class DeptServiceImpl implements DeptService {
         String key = CacheKey.DEPT_ID + id;
         Dept dept = redisUtils.get(key, Dept.class);
         if(dept == null){
-            dept = deptRepository.findById(id).orElseGet(Dept::new);
-            ValidationUtil.isNull(dept.getId(),"Dept","id",id);
+            dept = ValidationUtil.getByIdOrThrow(deptRepository, id, "Dept", Dept::new);
             redisUtils.set(key, dept, 1, TimeUnit.DAYS);
         }
         return deptMapper.toDto(dept);
@@ -129,8 +128,7 @@ public class DeptServiceImpl implements DeptService {
         if(resources.getPid() != null && resources.getId().equals(resources.getPid())) {
             throw new BadRequestException("上级不能为自己");
         }
-        Dept dept = deptRepository.findById(resources.getId()).orElseGet(Dept::new);
-        ValidationUtil.isNull( dept.getId(),"Dept","id",resources.getId());
+        Dept dept = ValidationUtil.getByIdOrThrow(deptRepository, resources.getId(), "Dept", Dept::new);
         resources.setId(dept.getId());
         deptRepository.save(resources);
         // 更新父节点中子节点数目

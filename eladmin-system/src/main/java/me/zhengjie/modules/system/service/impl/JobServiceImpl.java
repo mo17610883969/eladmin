@@ -66,8 +66,7 @@ public class JobServiceImpl implements JobService {
         String key = CacheKey.JOB_ID + id;
         Job job = redisUtils.get(key, Job.class);
         if(job == null){
-            job = jobRepository.findById(id).orElseGet(Job::new);
-            ValidationUtil.isNull(job.getId(),"Job","id",id);
+            job = ValidationUtil.getByIdOrThrow(jobRepository, id, "Job", Job::new);
             redisUtils.set(key, job, 1, TimeUnit.DAYS);
         }
         return jobMapper.toDto(job);
@@ -86,12 +85,11 @@ public class JobServiceImpl implements JobService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Job resources) {
-        Job job = jobRepository.findById(resources.getId()).orElseGet(Job::new);
+        Job job = ValidationUtil.getByIdOrThrow(jobRepository, resources.getId(), "Job", Job::new);
         Job old = jobRepository.findByName(resources.getName());
         if(old != null && !old.getId().equals(resources.getId())){
             throw new EntityExistException(Job.class,"name",resources.getName());
         }
-        ValidationUtil.isNull( job.getId(),"Job","id",resources.getId());
         resources.setId(job.getId());
         jobRepository.save(resources);
         // 删除缓存

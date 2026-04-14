@@ -81,8 +81,7 @@ public class ${className}ServiceImpl implements ${className}Service {
     @Override
     @Transactional
     public ${className}Dto findById(${pkColumnType} ${pkChangeColName}) {
-        ${className} ${changeClassName} = ${changeClassName}Repository.findById(${pkChangeColName}).orElseGet(${className}::new);
-        ValidationUtil.isNull(${changeClassName}.get${pkCapitalColName}(),"${className}","${pkChangeColName}",${pkChangeColName});
+        ${className} ${changeClassName} = ValidationUtil.getByIdOrThrow(${changeClassName}Repository, ${pkChangeColName}, "${className}", ${className}::new);
         return ${changeClassName}Mapper.toDto(${changeClassName});
     }
 
@@ -111,8 +110,7 @@ public class ${className}ServiceImpl implements ${className}Service {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(${className} resources) {
-        ${className} ${changeClassName} = ${changeClassName}Repository.findById(resources.get${pkCapitalColName}()).orElseGet(${className}::new);
-        ValidationUtil.isNull( ${changeClassName}.get${pkCapitalColName}(),"${className}","id",resources.get${pkCapitalColName}());
+        ${className} ${changeClassName} = ValidationUtil.getByIdOrThrow(${changeClassName}Repository, resources.get${pkCapitalColName}(), "${className}", ${className}::new);
 <#if columns??>
     <#list columns as column>
         <#if column.columnKey = 'UNI'>
