@@ -270,44 +270,55 @@ public class MenuServiceImpl implements MenuService {
     public List<MenuVo> buildMenus(List<MenuDto> menuDtos) {
         List<MenuVo> list = new LinkedList<>();
         menuDtos.forEach(menuDTO -> {
-                    if (menuDTO!=null){
-                        List<MenuDto> menuDtoList = menuDTO.getChildren();
-                        MenuVo menuVo = new MenuVo();
-                        menuVo.setName(ObjectUtil.isNotEmpty(menuDTO.getComponentName())  ? menuDTO.getComponentName() : menuDTO.getTitle());
-                        // 一级目录需要加斜杠，不然会报警告
-                        menuVo.setPath(menuDTO.getPid() == null ? "/" + menuDTO.getPath() :menuDTO.getPath());
-                        menuVo.setHidden(menuDTO.getHidden());
-                        // 如果不是外链
-                        if(!menuDTO.getIFrame()){
-                            if(menuDTO.getPid() == null){
-                                menuVo.setComponent(StringUtils.isEmpty(menuDTO.getComponent())?"Layout":menuDTO.getComponent());
-                                // 如果不是一级菜单，并且菜单类型为目录，则代表是多级菜单
-                            }else if(menuDTO.getType() == 0){
-                                menuVo.setComponent(StringUtils.isEmpty(menuDTO.getComponent())?"ParentView":menuDTO.getComponent());
-                            }else if(StringUtils.isNoneBlank(menuDTO.getComponent())){
-                                menuVo.setComponent(menuDTO.getComponent());
-                            }
-                        }
-                        menuVo.setMeta(new MenuMetaVo(menuDTO.getTitle(),menuDTO.getIcon(),!menuDTO.getCache()));
-                        if(CollectionUtil.isNotEmpty(menuDtoList)){
-                            menuVo.setAlwaysShow(true);
-                            menuVo.setRedirect("noredirect");
-                            menuVo.setChildren(buildMenus(menuDtoList));
-                            // 处理是一级菜单并且没有子菜单的情况
-                        } else if(menuDTO.getPid() == null){
-                            MenuVo menuVo1 = getMenuVo(menuDTO, menuVo);
-                            menuVo.setName(null);
-                            menuVo.setMeta(null);
-                            menuVo.setComponent("Layout");
-                            List<MenuVo> list1 = new ArrayList<>();
-                            list1.add(menuVo1);
-                            menuVo.setChildren(list1);
-                        }
-                        list.add(menuVo);
-                    }
-                }
-        );
+            if (menuDTO == null) {
+                return;
+            }
+            MenuVo menuVo = buildMenuVo(menuDTO);
+            List<MenuDto> menuDtoList = menuDTO.getChildren();
+            if (CollectionUtil.isNotEmpty(menuDtoList)) {
+                menuVo.setAlwaysShow(true);
+                menuVo.setRedirect("noredirect");
+                menuVo.setChildren(buildMenus(menuDtoList));
+            } else if (menuDTO.getPid() == null) {
+                handleRootMenuWithoutChildren(menuDTO, menuVo);
+            }
+            list.add(menuVo);
+        });
         return list;
+    }
+
+    private MenuVo buildMenuVo(MenuDto menuDTO) {
+        MenuVo menuVo = new MenuVo();
+        menuVo.setName(ObjectUtil.isNotEmpty(menuDTO.getComponentName())
+                ? menuDTO.getComponentName() : menuDTO.getTitle());
+        menuVo.setPath(menuDTO.getPid() == null ? "/" + menuDTO.getPath() : menuDTO.getPath());
+        menuVo.setHidden(menuDTO.getHidden());
+        setMenuComponent(menuDTO, menuVo);
+        menuVo.setMeta(new MenuMetaVo(menuDTO.getTitle(), menuDTO.getIcon(), !menuDTO.getCache()));
+        return menuVo;
+    }
+
+    private void setMenuComponent(MenuDto menuDTO, MenuVo menuVo) {
+        if (menuDTO.getIFrame()) {
+            return;
+        }
+        if (menuDTO.getPid() == null) {
+            menuVo.setComponent(StringUtils.isEmpty(menuDTO.getComponent()) ? "Layout" : menuDTO.getComponent());
+        } else if (menuDTO.getType() == 0) {
+            menuVo.setComponent(StringUtils.isEmpty(menuDTO.getComponent()) ? "ParentView" : menuDTO.getComponent());
+        } else if (StringUtils.isNoneBlank(menuDTO.getComponent())) {
+            menuVo.setComponent(menuDTO.getComponent());
+        }
+    }
+
+    private void handleRootMenuWithoutChildren(MenuDto menuDTO, MenuVo menuVo) {
+        MenuVo childMenuVo = getMenuVo(menuDTO, menuVo);
+        menuVo.setName(null);
+        menuVo.setMeta(null);
+        menuVo.setComponent("Layout");
+        List<MenuVo> children = new ArrayList<>();
+        children.add(childMenuVo);
+        menuVo.setChildren(children);
     }
 
     @Override

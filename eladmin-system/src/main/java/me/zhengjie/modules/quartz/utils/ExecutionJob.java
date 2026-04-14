@@ -35,7 +35,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.quartz.QuartzJobBean;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 /**
  * 参考人人开源，<a href="https://gitee.com/renrenio/renren-security">...</a>
@@ -53,67 +54,96 @@ public class ExecutionJob extends QuartzJobBean {
 
     @Override
     public void executeInternal(JobExecutionContext context) {
-        // 获取任务
         QuartzJob quartzJob = (QuartzJob) context.getMergedJobDataMap().get(QuartzJob.JOB_KEY);
-        // 获取spring bean
         QuartzLogRepository quartzLogRepository = SpringBeanHolder.getBean(QuartzLogRepository.class);
         QuartzJobService quartzJobService = SpringBeanHolder.getBean(QuartzJobService.class);
         RedisUtils redisUtils = SpringBeanHolder.getBean(RedisUtils.class);
+        QuartzLog log = createQuartzLog(quartzJob);
+        long startTime = System.currentTimeMillis();
+        try {
+            executeTask(quartzJob, log, startTime, redisUtils);
+            handleSubTask(quartzJob, quartzJobService);
+        } catch (Exception e) {
+            handleTaskFailure(quartzJob, log, startTime, e, redisUtils, quartzJobService);
+        } finally {
+            quartzLogRepository.save(log);
+        }
+    }
 
-        String uuid = quartzJob.getUuid();
-
+    private QuartzLog createQuartzLog(QuartzJob quartzJob) {
         QuartzLog log = new QuartzLog();
         log.setJobName(quartzJob.getJobName());
         log.setBeanName(quartzJob.getBeanName());
         log.setMethodName(quartzJob.getMethodName());
         log.setParams(quartzJob.getParams());
-        long startTime = System.currentTimeMillis();
         log.setCronExpression(quartzJob.getCronExpression());
+        return log;
+    }
+
+    private void executeTask(QuartzJob quartzJob, QuartzLog log, long startTime, RedisUtils redisUtils) {
         try {
-            // 执行任务
-            QuartzRunnable task = new QuartzRunnable(quartzJob.getBeanName(), quartzJob.getMethodName(), quartzJob.getParams());
+            QuartzRunnable task = new QuartzRunnable(quartzJob.getBeanName(),
+                    quartzJob.getMethodName(), quartzJob.getParams());
             Future<?> future = executor.submit(task);
             future.get();
             long times = System.currentTimeMillis() - startTime;
             log.setTime(times);
-            if(StringUtils.isNotBlank(uuid)) {
-                redisUtils.set(uuid, true);
+            if (StringUtils.isNotBlank(quartzJob.getUuid())) {
+                redisUtils.set(quartzJob.getUuid(), true);
             }
-            // 任务状态
             log.setIsSuccess(true);
             logger.info("任务执行成功，任务名称：{}, 执行时间：{}毫秒", quartzJob.getJobName(), times);
-            // 判断是否存在子任务
-            if(StringUtils.isNotBlank(quartzJob.getSubTask())){
-                String[] tasks = quartzJob.getSubTask().split("[,，]");
-                // 执行子任务
-                quartzJobService.executionSubJob(tasks);
-            }
         } catch (Exception e) {
-            if(StringUtils.isNotBlank(uuid)) {
-                redisUtils.set(uuid, false);
-            }
-            logger.error("任务执行失败，任务名称：{}", quartzJob.getJobName());
             long times = System.currentTimeMillis() - startTime;
             log.setTime(times);
-            // 任务状态 0：成功 1：失败
+            if (StringUtils.isNotBlank(quartzJob.getUuid())) {
+                redisUtils.set(quartzJob.getUuid(), false);
+            }
             log.setIsSuccess(false);
             log.setExceptionDetail(ThrowableUtil.getStackTrace(e));
-            // 任务如果失败了则暂停
-            if(quartzJob.getPauseAfterFailure() != null && quartzJob.getPauseAfterFailure()){
-                //更新状态
-                quartzJob.setIsPause(false);
-                quartzJobService.updateIsPause(quartzJob);
+            logger.error("任务执行失败，任务名称：{}", quartzJob.getJobName());
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void handleSubTask(QuartzJob quartzJob, QuartzJobService quartzJobService) {
+        if (StringUtils.isNotBlank(quartzJob.getSubTask())) {
+            try {
+                String[] tasks = quartzJob.getSubTask().split("[,，]");
+                quartzJobService.executionSubJob(tasks);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.error("子任务执行被中断，任务名称：{}", quartzJob.getJobName());
             }
-            if(quartzJob.getEmail() != null){
-                EmailService emailService = SpringBeanHolder.getBean(EmailService.class);
-                // 邮箱报警
-                if(StringUtils.isNoneBlank(quartzJob.getEmail())){
-                    EmailVo emailVo = taskAlarm(quartzJob, ThrowableUtil.getStackTrace(e));
-                    emailService.send(emailVo, emailService.find());
-                }
-            }
-        } finally {
-            quartzLogRepository.save(log);
+        }
+    }
+
+    private void handleTaskFailure(QuartzJob quartzJob, QuartzLog log, long startTime,
+                                   Exception e, RedisUtils redisUtils, QuartzJobService quartzJobService) {
+        if (StringUtils.isNotBlank(quartzJob.getUuid())) {
+            redisUtils.set(quartzJob.getUuid(), false);
+        }
+        logger.error("任务执行失败，任务名称：{}", quartzJob.getJobName());
+        long times = System.currentTimeMillis() - startTime;
+        log.setTime(times);
+        log.setIsSuccess(false);
+        log.setExceptionDetail(ThrowableUtil.getStackTrace(e));
+        handlePauseAfterFailure(quartzJob, quartzJobService);
+        sendAlarmEmail(quartzJob, e);
+    }
+
+    private void handlePauseAfterFailure(QuartzJob quartzJob, QuartzJobService quartzJobService) {
+        if (quartzJob.getPauseAfterFailure() != null && quartzJob.getPauseAfterFailure()) {
+            quartzJob.setIsPause(false);
+            quartzJobService.updateIsPause(quartzJob);
+        }
+    }
+
+    private void sendAlarmEmail(QuartzJob quartzJob, Exception e) {
+        if (quartzJob.getEmail() != null && StringUtils.isNoneBlank(quartzJob.getEmail())) {
+            EmailService emailService = SpringBeanHolder.getBean(EmailService.class);
+            EmailVo emailVo = taskAlarm(quartzJob, ThrowableUtil.getStackTrace(e));
+            emailService.send(emailVo, emailService.find());
         }
     }
 
