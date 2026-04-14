@@ -27,7 +27,6 @@ import me.zhengjie.modules.system.repository.JobRepository;
 import me.zhengjie.modules.system.service.JobService;
 import me.zhengjie.modules.system.service.dto.JobDto;
 import me.zhengjie.modules.system.service.mapstruct.JobMapper;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +43,9 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class JobServiceImpl implements JobService {
 
+    private static final String ENTITY_NAME = "Job";
+    private static final long CACHE_EXPIRE_DAYS = 1;
+
     private final JobRepository jobRepository;
     private final JobMapper jobMapper;
     private final RedisUtils redisUtils;
@@ -51,26 +53,21 @@ public class JobServiceImpl implements JobService {
 
     @Override
     public PageResult<JobDto> queryAll(JobQueryCriteria criteria, Pageable pageable) {
-        Page<Job> page = jobRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable);
-        return PageUtil.toPage(page.map(jobMapper::toDto).getContent(),page.getTotalElements());
+        return ServiceHelper.toPageResult(
+                jobRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                jobMapper::toDto);
     }
 
     @Override
     public List<JobDto> queryAll(JobQueryCriteria criteria) {
-        List<Job> list = jobRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder));
-        return jobMapper.toDto(list);
+        return jobMapper.toDto(jobRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public JobDto findById(Long id) {
         String key = CacheKey.JOB_ID + id;
-        Job job = redisUtils.get(key, Job.class);
-        if(job == null){
-            job = jobRepository.findById(id).orElseGet(Job::new);
-            ValidationUtil.isNull(job.getId(),"Job","id",id);
-            redisUtils.set(key, job, 1, TimeUnit.DAYS);
-        }
-        return jobMapper.toDto(job);
+        return ServiceHelper.findByIdWithCache(jobRepository, jobMapper, id, ENTITY_NAME, Job::new,
+                redisUtils, key, Job.class);
     }
 
     @Override
@@ -86,15 +83,13 @@ public class JobServiceImpl implements JobService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Job resources) {
-        Job job = jobRepository.findById(resources.getId()).orElseGet(Job::new);
         Job old = jobRepository.findByName(resources.getName());
         if(old != null && !old.getId().equals(resources.getId())){
             throw new EntityExistException(Job.class,"name",resources.getName());
         }
-        ValidationUtil.isNull( job.getId(),"Job","id",resources.getId());
+        Job job = ServiceHelper.findByIdRaw(jobRepository, resources.getId(), ENTITY_NAME, Job::new);
         resources.setId(job.getId());
         jobRepository.save(resources);
-        // 删除缓存
         delCaches(resources.getId());
     }
 
@@ -102,7 +97,6 @@ public class JobServiceImpl implements JobService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<Long> ids) {
         jobRepository.deleteAllByIdIn(ids);
-        // 删除缓存
         redisUtils.delByKeys(CacheKey.JOB_ID, ids);
     }
 
@@ -126,10 +120,6 @@ public class JobServiceImpl implements JobService {
         }
     }
 
-    /**
-     * 删除缓存
-     * @param id /
-     */
     public void delCaches(Long id){
         redisUtils.del(CacheKey.JOB_ID + id);
     }

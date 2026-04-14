@@ -43,6 +43,8 @@ import java.util.*;
 @Service(value = "quartzJobService")
 public class QuartzJobServiceImpl implements QuartzJobService {
 
+    private static final String ENTITY_NAME = "QuartzJob";
+
     private final QuartzJobRepository quartzJobRepository;
     private final QuartzLogRepository quartzLogRepository;
     private final QuartzManage quartzManage;
@@ -50,29 +52,27 @@ public class QuartzJobServiceImpl implements QuartzJobService {
 
     @Override
     public PageResult<QuartzJob> queryAll(JobQueryCriteria criteria, Pageable pageable){
-        return PageUtil.toPage(quartzJobRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable));
+        return PageUtil.toPage(quartzJobRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable));
     }
 
     @Override
     public PageResult<QuartzLog> queryAllLog(JobQueryCriteria criteria, Pageable pageable){
-        return PageUtil.toPage(quartzLogRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable));
+        return PageUtil.toPage(quartzLogRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable));
     }
 
     @Override
     public List<QuartzJob> queryAll(JobQueryCriteria criteria) {
-        return quartzJobRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder));
+        return quartzJobRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb));
     }
 
     @Override
     public List<QuartzLog> queryAllLog(JobQueryCriteria criteria) {
-        return quartzLogRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder));
+        return quartzLogRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb));
     }
 
     @Override
     public QuartzJob findById(Long id) {
-        QuartzJob quartzJob = quartzJobRepository.findById(id).orElseGet(QuartzJob::new);
-        ValidationUtil.isNull(quartzJob.getId(),"QuartzJob","id",id);
-        return quartzJob;
+        return ServiceHelper.findByIdRaw(quartzJobRepository, id, ENTITY_NAME, QuartzJob::new);
     }
 
     @Override
@@ -103,7 +103,6 @@ public class QuartzJobServiceImpl implements QuartzJobService {
 
     @Override
     public void updateIsPause(QuartzJob quartzJob) {
-        // 置换暂停状态
         if (quartzJob.getIsPause()) {
             quartzManage.resumeJob(quartzJob);
             quartzJob.setIsPause(false);
@@ -134,19 +133,14 @@ public class QuartzJobServiceImpl implements QuartzJobService {
     public void executionSubJob(String[] tasks) throws InterruptedException {
         for (String id : tasks) {
             if (StrUtil.isBlank(id)) {
-                // 如果是手动清除子任务id，会出现id为空字符串的问题
                 continue;
             }
             QuartzJob quartzJob = findById(Long.parseLong(id));
-            // 执行任务
             String uuid = IdUtil.simpleUUID();
             quartzJob.setUuid(uuid);
-            // 执行任务
             execution(quartzJob);
-            // 获取执行状态，如果执行失败则停止后面的子任务执行
             Boolean result = redisUtils.get(uuid, Boolean.class);
             while (result == null) {
-                // 休眠5秒，再次获取子任务执行情况
                 Thread.sleep(5000);
                 result = redisUtils.get(uuid, Boolean.class);
             }

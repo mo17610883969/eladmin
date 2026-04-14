@@ -26,7 +26,6 @@ import me.zhengjie.modules.maint.service.dto.DatabaseQueryCriteria;
 import me.zhengjie.modules.maint.service.mapstruct.DatabaseMapper;
 import me.zhengjie.modules.maint.util.SqlUtils;
 import me.zhengjie.utils.*;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,25 +42,26 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DatabaseServiceImpl implements DatabaseService {
 
+    private static final String ENTITY_NAME = "Database";
+
     private final DatabaseRepository databaseRepository;
     private final DatabaseMapper databaseMapper;
 
     @Override
     public PageResult<DatabaseDto> queryAll(DatabaseQueryCriteria criteria, Pageable pageable){
-        Page<Database> page = databaseRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable);
-        return PageUtil.toPage(page.map(databaseMapper::toDto));
+        return ServiceHelper.toPageResult(
+                databaseRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                databaseMapper);
     }
 
     @Override
     public List<DatabaseDto> queryAll(DatabaseQueryCriteria criteria){
-        return databaseMapper.toDto(databaseRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder)));
+        return databaseMapper.toDto(databaseRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public DatabaseDto findById(String id) {
-        Database database = databaseRepository.findById(id).orElseGet(Database::new);
-        ValidationUtil.isNull(database.getId(),"Database","id",id);
-        return databaseMapper.toDto(database);
+        return ServiceHelper.findById(databaseRepository, databaseMapper, id, ENTITY_NAME, Database::new);
     }
 
     @Override
@@ -74,8 +74,7 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Database resources) {
-        Database database = databaseRepository.findById(resources.getId()).orElseGet(Database::new);
-        ValidationUtil.isNull(database.getId(),"Database","id",resources.getId());
+        Database database = ServiceHelper.findByIdRaw(databaseRepository, resources.getId(), ENTITY_NAME, Database::new);
         database.copy(resources);
         databaseRepository.save(database);
     }
@@ -83,9 +82,7 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<String> ids) {
-        for (String id : ids) {
-            databaseRepository.deleteById(id);
-        }
+        ids.forEach(databaseRepository::deleteById);
     }
 
     @Override

@@ -24,7 +24,6 @@ import me.zhengjie.modules.maint.service.dto.AppDto;
 import me.zhengjie.modules.maint.service.dto.AppQueryCriteria;
 import me.zhengjie.modules.maint.service.mapstruct.AppMapper;
 import me.zhengjie.utils.*;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,74 +39,53 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AppServiceImpl implements AppService {
 
+    private static final String ENTITY_NAME = "App";
+    private static final String OPT_PATH = "/opt";
+    private static final String HOME_PATH = "/home";
+    private static final Set<String> FORBIDDEN_CHARS = Set.of(";", "|", "&");
+
     private final AppRepository appRepository;
     private final AppMapper appMapper;
 
     @Override
     public PageResult<AppDto> queryAll(AppQueryCriteria criteria, Pageable pageable){
-        Page<App> page = appRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable);
-        return PageUtil.toPage(page.map(appMapper::toDto));
+        return ServiceHelper.toPageResult(
+                appRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                appMapper);
     }
 
     @Override
     public List<AppDto> queryAll(AppQueryCriteria criteria){
-        return appMapper.toDto(appRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder)));
+        return appMapper.toDto(appRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public AppDto findById(Long id) {
-        App app = appRepository.findById(id).orElseGet(App::new);
-        ValidationUtil.isNull(app.getId(),"App","id",id);
-        return appMapper.toDto(app);
+        return ServiceHelper.findById(appRepository, appMapper, id, ENTITY_NAME, App::new);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void create(App resources) {
-        // 验证应用名称是否存在恶意攻击payload，https://github.com/elunez/eladmin/issues/873
-        String appName = resources.getName();
-        if (appName.contains(";") || appName.contains("|") || appName.contains("&")) {
-            throw new IllegalArgumentException("非法的应用名称，请勿包含[; | &]等特殊字符");
-        }
-        verification(resources);
+        validateAppName(resources.getName());
+        validatePaths(resources);
         appRepository.save(resources);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(App resources) {
-        // 验证应用名称是否存在恶意攻击payload，https://github.com/elunez/eladmin/issues/873
-        String appName = resources.getName();
-        if (appName.contains(";") || appName.contains("|") || appName.contains("&")) {
-            throw new IllegalArgumentException("非法的应用名称，请勿包含[; | &]等特殊字符");
-        }
-        verification(resources);
-        App app = appRepository.findById(resources.getId()).orElseGet(App::new);
-        ValidationUtil.isNull(app.getId(),"App","id",resources.getId());
+        validateAppName(resources.getName());
+        validatePaths(resources);
+        App app = ServiceHelper.findByIdRaw(appRepository, resources.getId(), ENTITY_NAME, App::new);
         app.copy(resources);
         appRepository.save(app);
-    }
-
-    private void verification(App resources){
-        String opt = "/opt";
-        String home = "/home";
-        if (!(resources.getUploadPath().startsWith(opt) || resources.getUploadPath().startsWith(home))) {
-            throw new BadRequestException("文件只能上传在opt目录或者home目录 ");
-        }
-        if (!(resources.getDeployPath().startsWith(opt) || resources.getDeployPath().startsWith(home))) {
-            throw new BadRequestException("文件只能部署在opt目录或者home目录 ");
-        }
-        if (!(resources.getBackupPath().startsWith(opt) || resources.getBackupPath().startsWith(home))) {
-            throw new BadRequestException("文件只能备份在opt目录或者home目录 ");
-        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<Long> ids) {
-        for (Long id : ids) {
-            appRepository.deleteById(id);
-        }
+        ids.forEach(appRepository::deleteById);
     }
 
     @Override
@@ -126,5 +104,23 @@ public class AppServiceImpl implements AppService {
             list.add(map);
         }
         FileUtil.downloadExcel(list, response);
+    }
+
+    private void validateAppName(String appName) {
+        if (FORBIDDEN_CHARS.stream().anyMatch(appName::contains)) {
+            throw new IllegalArgumentException("非法的应用名称，请勿包含[; | &]等特殊字符");
+        }
+    }
+
+    private void validatePaths(App resources) {
+        validatePath(resources.getUploadPath(), "上传");
+        validatePath(resources.getDeployPath(), "部署");
+        validatePath(resources.getBackupPath(), "备份");
+    }
+
+    private void validatePath(String path, String actionName) {
+        if (!(path.startsWith(OPT_PATH) || path.startsWith(HOME_PATH))) {
+            throw new BadRequestException("文件只能" + actionName + "在opt目录或者home目录 ");
+        }
     }
 }

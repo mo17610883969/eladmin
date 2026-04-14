@@ -34,7 +34,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletResponse;
@@ -47,26 +46,27 @@ import javax.servlet.http.HttpServletResponse;
 @RequiredArgsConstructor
 public class LocalStorageServiceImpl implements LocalStorageService {
 
+    private static final String ENTITY_NAME = "LocalStorage";
+
     private final LocalStorageRepository localStorageRepository;
     private final LocalStorageMapper localStorageMapper;
     private final FileProperties properties;
 
     @Override
     public PageResult<LocalStorageDto> queryAll(LocalStorageQueryCriteria criteria, Pageable pageable){
-        Page<LocalStorage> page = localStorageRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable);
-        return PageUtil.toPage(page.map(localStorageMapper::toDto));
+        return ServiceHelper.toPageResult(
+                localStorageRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                localStorageMapper);
     }
 
     @Override
     public List<LocalStorageDto> queryAll(LocalStorageQueryCriteria criteria){
-        return localStorageMapper.toDto(localStorageRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder)));
+        return localStorageMapper.toDto(localStorageRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public LocalStorageDto findById(Long id){
-        LocalStorage localStorage = localStorageRepository.findById(id).orElseGet(LocalStorage::new);
-        ValidationUtil.isNull(localStorage.getId(),"LocalStorage","id",id);
-        return localStorageMapper.toDto(localStorage);
+        return ServiceHelper.findById(localStorageRepository, localStorageMapper, id, ENTITY_NAME, LocalStorage::new);
     }
 
     @Override
@@ -99,8 +99,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(LocalStorage resources) {
-        LocalStorage localStorage = localStorageRepository.findById(resources.getId()).orElseGet(LocalStorage::new);
-        ValidationUtil.isNull( localStorage.getId(),"LocalStorage","id",resources.getId());
+        LocalStorage localStorage = ServiceHelper.findByIdRaw(localStorageRepository, resources.getId(), ENTITY_NAME, LocalStorage::new);
         localStorage.copy(resources);
         localStorageRepository.save(localStorage);
     }
@@ -109,7 +108,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteAll(Long[] ids) {
         for (Long id : ids) {
-            LocalStorage storage = localStorageRepository.findById(id).orElseGet(LocalStorage::new);
+            LocalStorage storage = ServiceHelper.findByIdRaw(localStorageRepository, id, ENTITY_NAME, LocalStorage::new);
             FileUtil.del(storage.getPath());
             localStorageRepository.delete(storage);
         }

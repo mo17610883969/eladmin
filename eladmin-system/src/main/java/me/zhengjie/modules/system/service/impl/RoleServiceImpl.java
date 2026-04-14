@@ -35,7 +35,6 @@ import me.zhengjie.modules.system.service.dto.UserDto;
 import me.zhengjie.modules.system.service.mapstruct.RoleMapper;
 import me.zhengjie.modules.system.service.mapstruct.RoleSmallMapper;
 import me.zhengjie.utils.*;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -54,6 +53,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RoleServiceImpl implements RoleService {
 
+    private static final String ENTITY_NAME = "Role";
+
     private final RoleRepository roleRepository;
     private final RoleMapper roleMapper;
     private final RoleSmallMapper roleSmallMapper;
@@ -69,25 +70,21 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public List<RoleDto> queryAll(RoleQueryCriteria criteria) {
-        return roleMapper.toDto(roleRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder)));
+        return roleMapper.toDto(roleRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public PageResult<RoleDto> queryAll(RoleQueryCriteria criteria, Pageable pageable) {
-        Page<Role> page = roleRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder), pageable);
-        return PageUtil.toPage(page.map(roleMapper::toDto));
+        return ServiceHelper.toPageResult(
+                roleRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                roleMapper);
     }
 
     @Override
     public RoleDto findById(long id) {
         String key = CacheKey.ROLE_ID + id;
-        Role role = redisUtils.get(key, Role.class);
-        if (role == null) {
-            role = roleRepository.findById(id).orElseGet(Role::new);
-            ValidationUtil.isNull(role.getId(), "Role", "id", id);
-            redisUtils.set(key, role, 1, TimeUnit.DAYS);
-        }
-        return roleMapper.toDto(role);
+        return ServiceHelper.findByIdWithCache(roleRepository, roleMapper, id, ENTITY_NAME, Role::new,
+                redisUtils, key, Role.class);
     }
 
     @Override
@@ -102,8 +99,7 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Role resources) {
-        Role role = roleRepository.findById(resources.getId()).orElseGet(Role::new);
-        ValidationUtil.isNull(role.getId(), "Role", "id", resources.getId());
+        Role role = ServiceHelper.findByIdRaw(roleRepository, resources.getId(), ENTITY_NAME, Role::new);
 
         Role role1 = roleRepository.findByName(resources.getName());
 
@@ -116,7 +112,6 @@ public class RoleServiceImpl implements RoleService {
         role.setDepts(resources.getDepts());
         role.setLevel(resources.getLevel());
         roleRepository.save(role);
-        // 更新相关缓存
         delCaches(role.getId(), null);
     }
 
@@ -124,7 +119,6 @@ public class RoleServiceImpl implements RoleService {
     public void updateMenu(Role resources, RoleDto roleDTO) {
         Role role = roleMapper.toEntity(roleDTO);
         List<User> users = userRepository.findByRoleId(role.getId());
-        // 更新菜单
         role.setMenus(resources.getMenus());
         delCaches(resources.getId(), users);
         roleRepository.save(role);
@@ -133,7 +127,6 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void untiedMenu(Long menuId) {
-        // 更新菜单
         roleRepository.untiedMenu(menuId);
     }
 
@@ -141,7 +134,6 @@ public class RoleServiceImpl implements RoleService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<Long> ids) {
         for (Long id : ids) {
-            // 更新相关缓存
             delCaches(id, null);
         }
         roleRepository.deleteAllByIdIn(ids);
@@ -176,7 +168,6 @@ public class RoleServiceImpl implements RoleService {
         List<AuthorityDto> authorityDtos = redisUtils.getList(key, AuthorityDto.class);
         if (CollUtil.isEmpty(authorityDtos)) {
             Set<String> permissions = new HashSet<>();
-            // 如果是管理员直接返回
             if (user.getIsAdmin()) {
                 permissions.add("admin");
                 return permissions.stream().map(AuthorityDto::new)
@@ -219,10 +210,6 @@ public class RoleServiceImpl implements RoleService {
         return roleRepository.findInMenuId(menuIds);
     }
 
-    /**
-     * 清理缓存
-     * @param id /
-     */
     public void delCaches(Long id, List<User> users) {
         users = CollectionUtil.isEmpty(users) ? userRepository.findByRoleId(id) : users;
         if (CollectionUtil.isNotEmpty(users)) {

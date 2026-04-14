@@ -24,7 +24,6 @@ import me.zhengjie.modules.maint.service.dto.DeployHistoryDto;
 import me.zhengjie.modules.maint.service.dto.DeployHistoryQueryCriteria;
 import me.zhengjie.modules.maint.service.mapstruct.DeployHistoryMapper;
 import me.zhengjie.utils.*;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,25 +39,26 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DeployHistoryServiceImpl implements DeployHistoryService {
 
+    private static final String ENTITY_NAME = "DeployHistory";
+
     private final DeployHistoryRepository deployhistoryRepository;
     private final DeployHistoryMapper deployhistoryMapper;
 
     @Override
     public PageResult<DeployHistoryDto> queryAll(DeployHistoryQueryCriteria criteria, Pageable pageable){
-        Page<DeployHistory> page = deployhistoryRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable);
-        return PageUtil.toPage(page.map(deployhistoryMapper::toDto));
+        return ServiceHelper.toPageResult(
+                deployhistoryRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                deployhistoryMapper);
     }
 
     @Override
     public List<DeployHistoryDto> queryAll(DeployHistoryQueryCriteria criteria){
-        return deployhistoryMapper.toDto(deployhistoryRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder)));
+        return deployhistoryMapper.toDto(deployhistoryRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public DeployHistoryDto findById(String id) {
-        DeployHistory deployhistory = deployhistoryRepository.findById(id).orElseGet(DeployHistory::new);
-        ValidationUtil.isNull(deployhistory.getId(),"DeployHistory","id",id);
-        return deployhistoryMapper.toDto(deployhistory);
+        return ServiceHelper.findById(deployhistoryRepository, deployhistoryMapper, id, ENTITY_NAME, DeployHistory::new);
     }
 
     @Override
@@ -71,9 +71,7 @@ public class DeployHistoryServiceImpl implements DeployHistoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<String> ids) {
-        for (String id : ids) {
-            deployhistoryRepository.deleteById(id);
-        }
+        ids.forEach(deployhistoryRepository::deleteById);
     }
 
     @Override

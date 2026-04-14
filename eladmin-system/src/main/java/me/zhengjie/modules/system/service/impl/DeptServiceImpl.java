@@ -49,6 +49,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeptServiceImpl implements DeptService {
 
+    private static final String ENTITY_NAME = "Dept";
+
     private final DeptRepository deptRepository;
     private final DeptMapper deptMapper;
     private final UserRepository userRepository;
@@ -66,7 +68,6 @@ public class DeptServiceImpl implements DeptService {
             List<Field> fields = QueryHelp.getAllFields(criteria.getClass(), new ArrayList<>());
             List<String> fieldNames = new ArrayList<String>(){{ add("pidIsNull");add("enabled");}};
             for (Field field : fields) {
-                //设置对象的访问权限，保证对private的属性的访问
                 field.setAccessible(true);
                 Object val = field.get(criteria);
                 if(fieldNames.contains(field.getName())){
@@ -78,8 +79,7 @@ public class DeptServiceImpl implements DeptService {
                 }
             }
         }
-        List<DeptDto> list = deptMapper.toDto(deptRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),sort));
-        // 如果为空，就代表为自定义权限或者本级权限，就需要去重，不理解可以注释掉，看查询结果
+        List<DeptDto> list = deptMapper.toDto(deptRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), sort));
         if(StringUtils.isBlank(dataScopeType)){
             return deduplication(list);
         }
@@ -89,13 +89,8 @@ public class DeptServiceImpl implements DeptService {
     @Override
     public DeptDto findById(Long id) {
         String key = CacheKey.DEPT_ID + id;
-        Dept dept = redisUtils.get(key, Dept.class);
-        if(dept == null){
-            dept = deptRepository.findById(id).orElseGet(Dept::new);
-            ValidationUtil.isNull(dept.getId(),"Dept","id",id);
-            redisUtils.set(key, dept, 1, TimeUnit.DAYS);
-        }
-        return deptMapper.toDto(dept);
+        return ServiceHelper.findByIdWithCache(deptRepository, deptMapper, id, ENTITY_NAME, Dept::new,
+                redisUtils, key, Dept.class);
     }
 
     @Override
@@ -112,31 +107,24 @@ public class DeptServiceImpl implements DeptService {
     @Transactional(rollbackFor = Exception.class)
     public void create(Dept resources) {
         deptRepository.save(resources);
-        // 计算子节点数目
         resources.setSubCount(0);
-        // 清理缓存
         updateSubCnt(resources.getPid());
-        // 清理自定义角色权限的datascope缓存
         delCaches(resources.getPid());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Dept resources) {
-        // 旧的部门
         Long oldPid = findById(resources.getId()).getPid();
         Long newPid = resources.getPid();
         if(resources.getPid() != null && resources.getId().equals(resources.getPid())) {
             throw new BadRequestException("上级不能为自己");
         }
-        Dept dept = deptRepository.findById(resources.getId()).orElseGet(Dept::new);
-        ValidationUtil.isNull( dept.getId(),"Dept","id",resources.getId());
+        Dept dept = ServiceHelper.findByIdRaw(deptRepository, resources.getId(), ENTITY_NAME, Dept::new);
         resources.setId(dept.getId());
         deptRepository.save(resources);
-        // 更新父节点中子节点数目
         updateSubCnt(oldPid);
         updateSubCnt(newPid);
-        // 清理缓存
         delCaches(resources.getId());
     }
 
@@ -144,7 +132,6 @@ public class DeptServiceImpl implements DeptService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<DeptDto> deptDtos) {
         for (DeptDto deptDto : deptDtos) {
-            // 清理缓存
             delCaches(deptDto.getId());
             deptRepository.deleteById(deptDto.getId());
             updateSubCnt(deptDto.getPid());
@@ -273,13 +260,8 @@ public class DeptServiceImpl implements DeptService {
         return deptDtos;
     }
 
-    /**
-     * 清理缓存
-     * @param id /
-     */
     public void delCaches(Long id){
         List<User> users = userRepository.findByRoleDeptId(id);
-        // 删除数据权限
         redisUtils.delByKeys(CacheKey.DATA_USER, users.stream().map(User::getId).collect(Collectors.toSet()));
         redisUtils.del(CacheKey.DEPT_ID + id);
     }

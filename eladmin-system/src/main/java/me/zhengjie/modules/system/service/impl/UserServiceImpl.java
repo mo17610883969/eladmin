@@ -29,7 +29,6 @@ import me.zhengjie.modules.system.service.UserService;
 import me.zhengjie.modules.system.service.dto.*;
 import me.zhengjie.modules.system.service.mapstruct.UserMapper;
 import me.zhengjie.utils.*;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +38,6 @@ import javax.validation.constraints.NotBlank;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +48,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
+    private static final String ENTITY_NAME = "User";
+    private static final Set<String> ALLOWED_AVATAR_TYPES = Set.of("gif", "jpg", "png", "jpeg");
+
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final FileProperties properties;
@@ -59,27 +60,22 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResult<UserDto> queryAll(UserQueryCriteria criteria, Pageable pageable) {
-        Page<User> page = userRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder), pageable);
-        return PageUtil.toPage(page.map(userMapper::toDto));
+        return ServiceHelper.toPageResult(
+                userRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                userMapper);
     }
 
     @Override
     public List<UserDto> queryAll(UserQueryCriteria criteria) {
-        List<User> users = userRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root, criteria, criteriaBuilder));
-        return userMapper.toDto(users);
+        return userMapper.toDto(userRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public UserDto findById(long id) {
         String key = CacheKey.USER_ID + id;
-        User user = redisUtils.get(key, User.class);
-        if (user == null) {
-            user = userRepository.findById(id).orElseGet(User::new);
-            ValidationUtil.isNull(user.getId(), "User", "id", id);
-            redisUtils.set(key, user, 1, TimeUnit.DAYS);
-        }
-        return userMapper.toDto(user);
+        return ServiceHelper.findByIdWithCache(userRepository, userMapper, id, ENTITY_NAME, User::new,
+                redisUtils, key, User.class);
     }
 
     @Override
@@ -100,8 +96,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(User resources) throws Exception {
-        User user = userRepository.findById(resources.getId()).orElseGet(User::new);
-        ValidationUtil.isNull(user.getId(), "User", "id", resources.getId());
+        User user = ServiceHelper.findByIdRaw(userRepository, resources.getId(), ENTITY_NAME, User::new);
         User user1 = userRepository.findByUsername(resources.getUsername());
         User user2 = userRepository.findByEmail(resources.getEmail());
         User user3 = userRepository.findByPhone(resources.getPhone());
@@ -114,18 +109,15 @@ public class UserServiceImpl implements UserService {
         if (user3 != null && !user.getId().equals(user3.getId())) {
             throw new EntityExistException(User.class, "phone", resources.getPhone());
         }
-        // 如果用户的角色改变
         if (!resources.getRoles().equals(user.getRoles())) {
             redisUtils.del(CacheKey.DATA_USER + resources.getId());
             redisUtils.del(CacheKey.MENU_USER + resources.getId());
             redisUtils.del(CacheKey.ROLE_AUTH + resources.getId());
             redisUtils.del(CacheKey.ROLE_USER + resources.getId());
         }
-        // 修改部门会影响 数据权限
         if (!Objects.equals(resources.getDept(),user.getDept())) {
             redisUtils.del(CacheKey.DATA_USER + resources.getId());
         }
-        // 如果用户被禁用，则清除用户登录信息
         if(!resources.getEnabled()){
             onlineUserService.kickOutForUsername(resources.getUsername());
         }
@@ -139,14 +131,13 @@ public class UserServiceImpl implements UserService {
         user.setNickName(resources.getNickName());
         user.setGender(resources.getGender());
         userRepository.save(user);
-        // 清除缓存
         delCaches(user.getId(), user.getUsername());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateCenter(User resources) {
-        User user = userRepository.findById(resources.getId()).orElseGet(User::new);
+        User user = ServiceHelper.findByIdRaw(userRepository, resources.getId(), ENTITY_NAME, User::new);
         User user1 = userRepository.findByPhone(resources.getPhone());
         if (user1 != null && !user.getId().equals(user1.getId())) {
             throw new EntityExistException(User.class, "phone", resources.getPhone());
@@ -155,7 +146,6 @@ public class UserServiceImpl implements UserService {
         user.setPhone(resources.getPhone());
         user.setGender(resources.getGender());
         userRepository.save(user);
-        // 清理缓存
         delCaches(user.getId(), user.getUsername());
     }
 
@@ -163,7 +153,6 @@ public class UserServiceImpl implements UserService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<Long> ids) {
         for (Long id : ids) {
-            // 清理缓存
             UserDto user = findById(id);
             delCaches(user.getId(), user.getUsername());
         }
@@ -201,27 +190,20 @@ public class UserServiceImpl implements UserService {
     @Transactional(rollbackFor = Exception.class)
     public void resetPwd(Set<Long> ids, String pwd) {
         List<User> users = userRepository.findAllById(ids);
-        // 清除缓存
         users.forEach(user -> {
-            // 清除缓存
             flushCache(user.getUsername());
-            // 强制退出
             onlineUserService.kickOutForUsername(user.getUsername());
         });
-        // 重置密码
         userRepository.resetPwd(ids, pwd);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, String> updateAvatar(MultipartFile multipartFile) {
-        // 文件大小验证
         FileUtil.checkSize(properties.getAvatarMaxSize(), multipartFile.getSize());
-        // 验证文件上传的格式
-        String image = "gif jpg png jpeg";
         String fileType = FileUtil.getExtensionName(multipartFile.getOriginalFilename());
-        if(fileType != null && !image.contains(fileType)){
-            throw new BadRequestException("文件格式错误！, 仅支持 " + image +" 格式");
+        if(fileType != null && !ALLOWED_AVATAR_TYPES.contains(fileType)){
+            throw new BadRequestException("文件格式错误！, 仅支持 " + String.join(" ", ALLOWED_AVATAR_TYPES) + " 格式");
         }
         User user = userRepository.findByUsername(SecurityUtils.getCurrentUsername());
         String oldPath = user.getAvatarPath();
@@ -266,21 +248,11 @@ public class UserServiceImpl implements UserService {
         FileUtil.downloadExcel(list, response);
     }
 
-    /**
-     * 清理缓存
-     *
-     * @param id /
-     */
     public void delCaches(Long id, String username) {
         redisUtils.del(CacheKey.USER_ID + id);
         flushCache(username);
     }
 
-    /**
-     * 清理 登陆时 用户缓存信息
-     *
-     * @param username /
-     */
     private void flushCache(String username) {
         userCacheManager.cleanUserCache(username);
     }

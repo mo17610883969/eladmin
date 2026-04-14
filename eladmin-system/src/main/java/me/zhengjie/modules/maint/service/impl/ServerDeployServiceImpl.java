@@ -24,7 +24,6 @@ import me.zhengjie.modules.maint.service.dto.ServerDeployQueryCriteria;
 import me.zhengjie.modules.maint.service.mapstruct.ServerDeployMapper;
 import me.zhengjie.modules.maint.util.ExecuteShellUtil;
 import me.zhengjie.utils.*;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,25 +39,26 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ServerDeployServiceImpl implements ServerDeployService {
 
+    private static final String ENTITY_NAME = "ServerDeploy";
+
     private final ServerDeployRepository serverDeployRepository;
     private final ServerDeployMapper serverDeployMapper;
 
     @Override
     public PageResult<ServerDeployDto> queryAll(ServerDeployQueryCriteria criteria, Pageable pageable){
-        Page<ServerDeploy> page = serverDeployRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder),pageable);
-        return PageUtil.toPage(page.map(serverDeployMapper::toDto));
+        return ServiceHelper.toPageResult(
+                serverDeployRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb), pageable),
+                serverDeployMapper);
     }
 
     @Override
     public List<ServerDeployDto> queryAll(ServerDeployQueryCriteria criteria){
-        return serverDeployMapper.toDto(serverDeployRepository.findAll((root, criteriaQuery, criteriaBuilder) -> QueryHelp.getPredicate(root,criteria,criteriaBuilder)));
+        return serverDeployMapper.toDto(serverDeployRepository.findAll((root, query, cb) -> QueryHelp.getPredicate(root, criteria, cb)));
     }
 
     @Override
     public ServerDeployDto findById(Long id) {
-        ServerDeploy server = serverDeployRepository.findById(id).orElseGet(ServerDeploy::new);
-        ValidationUtil.isNull(server.getId(),"ServerDeploy","id",id);
-        return serverDeployMapper.toDto(server);
+        return ServiceHelper.findById(serverDeployRepository, serverDeployMapper, id, ENTITY_NAME, ServerDeploy::new);
     }
 
     @Override
@@ -91,8 +91,7 @@ public class ServerDeployServiceImpl implements ServerDeployService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(ServerDeploy resources) {
-        ServerDeploy serverDeploy = serverDeployRepository.findById(resources.getId()).orElseGet(ServerDeploy::new);
-        ValidationUtil.isNull( serverDeploy.getId(),"ServerDeploy","id",resources.getId());
+        ServerDeploy serverDeploy = ServiceHelper.findByIdRaw(serverDeployRepository, resources.getId(), ENTITY_NAME, ServerDeploy::new);
         serverDeploy.copy(resources);
         serverDeployRepository.save(serverDeploy);
     }
@@ -100,9 +99,7 @@ public class ServerDeployServiceImpl implements ServerDeployService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Set<Long> ids) {
-        for (Long id : ids) {
-            serverDeployRepository.deleteById(id);
-        }
+        ids.forEach(serverDeployRepository::deleteById);
     }
 
     @Override
