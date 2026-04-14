@@ -75,8 +75,7 @@ public class UserServiceImpl implements UserService {
         String key = CacheKey.USER_ID + id;
         User user = redisUtils.get(key, User.class);
         if (user == null) {
-            user = userRepository.findById(id).orElseGet(User::new);
-            ValidationUtil.isNull(user.getId(), "User", "id", id);
+            user = ValidationUtil.getEntityById(id, () -> userRepository.findById(id).orElseGet(User::new), "User");
             redisUtils.set(key, user, 1, TimeUnit.DAYS);
         }
         return userMapper.toDto(user);
@@ -100,8 +99,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(User resources) throws Exception {
-        User user = userRepository.findById(resources.getId()).orElseGet(User::new);
-        ValidationUtil.isNull(user.getId(), "User", "id", resources.getId());
+        User user = ValidationUtil.getEntityById(resources.getId(), () -> userRepository.findById(resources.getId()).orElseGet(User::new), "User");
         User user1 = userRepository.findByUsername(resources.getUsername());
         User user2 = userRepository.findByEmail(resources.getEmail());
         User user3 = userRepository.findByPhone(resources.getPhone());

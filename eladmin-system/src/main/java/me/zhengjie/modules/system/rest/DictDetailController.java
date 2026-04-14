@@ -25,6 +25,8 @@ import me.zhengjie.modules.system.service.DictDetailService;
 import me.zhengjie.modules.system.service.dto.DictDetailDto;
 import me.zhengjie.modules.system.service.dto.DictDetailQueryCriteria;
 import me.zhengjie.utils.PageResult;
+import me.zhengjie.utils.StringUtils;
+import me.zhengjie.utils.ValidationUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -60,7 +62,7 @@ public class DictDetailController {
     @ApiOperation("查询多个字典详情")
     @GetMapping(value = "/map")
     public ResponseEntity<Object> getDictDetailMaps(@RequestParam String dictName){
-        String[] names = dictName.split("[,，]");
+        String[] names = StringUtils.splitByComma(dictName);
         Map<String, List<DictDetailDto>> dictMap = new HashMap<>(16);
         for (String name : names) {
             dictMap.put(name, dictDetailService.getDictByName(name));
@@ -73,9 +75,7 @@ public class DictDetailController {
     @PostMapping
     @PreAuthorize("@el.check('dict:add')")
     public ResponseEntity<Object> createDictDetail(@Validated @RequestBody DictDetail resources){
-        if (resources.getId() != null) {
-            throw new BadRequestException("A new "+ ENTITY_NAME +" cannot already have an ID");
-        }
+        ValidationUtil.validateNewEntity(resources.getId(), ENTITY_NAME);
         dictDetailService.create(resources);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }

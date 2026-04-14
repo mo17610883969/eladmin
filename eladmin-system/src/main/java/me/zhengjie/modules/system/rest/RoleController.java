@@ -28,6 +28,7 @@ import me.zhengjie.modules.system.service.dto.RoleQueryCriteria;
 import me.zhengjie.modules.system.service.dto.RoleSmallDto;
 import me.zhengjie.utils.PageResult;
 import me.zhengjie.utils.SecurityUtils;
+import me.zhengjie.utils.ValidationUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -94,9 +95,7 @@ public class RoleController {
     @PostMapping
     @PreAuthorize("@el.check('roles:add')")
     public ResponseEntity<Object> createRole(@Validated @RequestBody Role resources){
-        if (resources.getId() != null) {
-            throw new BadRequestException("A new "+ ENTITY_NAME +" cannot already have an ID");
-        }
+        ValidationUtil.validateNewEntity(resources.getId(), ENTITY_NAME);
         getLevels(resources.getLevel());
         roleService.create(resources);
         return new ResponseEntity<>(HttpStatus.CREATED);

@@ -18,6 +18,7 @@ package me.zhengjie.utils;
 import cn.hutool.core.lang.Validator;
 import cn.hutool.core.util.ObjectUtil;
 import me.zhengjie.exception.BadRequestException;
+import java.util.function.Supplier;
 
 /**
  * 验证工具
@@ -43,4 +44,37 @@ public class ValidationUtil {
   public static boolean isEmail(String email) {
     return Validator.isEmail(email);
   }
+
+    /**
+     * 验证新实体不应有ID
+     *
+     * @param id 实体ID
+     * @param entityName 实体名称
+     */
+    public static void validateNewEntity(Long id, String entityName) {
+        if (id != null) {
+            throw new BadRequestException("A new " + entityName + " cannot already have an ID");
+        }
+    }
+
+    /**
+     * 根据ID获取实体并验证存在性
+     *
+     * @param id 实体ID
+     * @param entitySupplier 实体获取函数
+     * @param entityName 实体名称
+     * @param <T> 实体类型
+     * @return 实体对象
+     */
+    public static <T> T getEntityById(Long id, Supplier<T> entitySupplier, String entityName) {
+        T entity = entitySupplier.get();
+        try {
+            java.lang.reflect.Method getIdMethod = entity.getClass().getMethod("getId");
+            Object entityId = getIdMethod.invoke(entity);
+            isNull(entityId, entityName, "id", id);
+        } catch (Exception e) {
+            throw new BadRequestException(entityName + " 不存在: id is " + id);
+        }
+        return entity;
+    }
 }

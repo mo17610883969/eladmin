@@ -56,8 +56,7 @@ public class DeployHistoryServiceImpl implements DeployHistoryService {
 
     @Override
     public DeployHistoryDto findById(String id) {
-        DeployHistory deployhistory = deployhistoryRepository.findById(id).orElseGet(DeployHistory::new);
-        ValidationUtil.isNull(deployhistory.getId(),"DeployHistory","id",id);
+        DeployHistory deployhistory = ValidationUtil.getEntityById(Long.valueOf(id), () -> deployhistoryRepository.findById(id).orElseGet(DeployHistory::new), "DeployHistory");
         return deployhistoryMapper.toDto(deployhistory);
     }
 

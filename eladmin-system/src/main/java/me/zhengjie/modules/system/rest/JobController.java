@@ -25,6 +25,7 @@ import me.zhengjie.modules.system.service.JobService;
 import me.zhengjie.modules.system.service.dto.JobDto;
 import me.zhengjie.modules.system.service.dto.JobQueryCriteria;
 import me.zhengjie.utils.PageResult;
+import me.zhengjie.utils.ValidationUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -67,9 +68,7 @@ public class JobController {
     @PostMapping
     @PreAuthorize("@el.check('job:add')")
     public ResponseEntity<Object> createJob(@Validated @RequestBody Job resources){
-        if (resources.getId() != null) {
-            throw new BadRequestException("A new "+ ENTITY_NAME +" cannot already have an ID");
-        }
+        ValidationUtil.validateNewEntity(resources.getId(), ENTITY_NAME);
         jobService.create(resources);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }

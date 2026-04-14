@@ -64,8 +64,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
 
     @Override
     public LocalStorageDto findById(Long id){
-        LocalStorage localStorage = localStorageRepository.findById(id).orElseGet(LocalStorage::new);
-        ValidationUtil.isNull(localStorage.getId(),"LocalStorage","id",id);
+        LocalStorage localStorage = ValidationUtil.getEntityById(id, () -> localStorageRepository.findById(id).orElseGet(LocalStorage::new), "LocalStorage");
         return localStorageMapper.toDto(localStorage);
     }
 
@@ -99,8 +98,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(LocalStorage resources) {
-        LocalStorage localStorage = localStorageRepository.findById(resources.getId()).orElseGet(LocalStorage::new);
-        ValidationUtil.isNull( localStorage.getId(),"LocalStorage","id",resources.getId());
+        LocalStorage localStorage = ValidationUtil.getEntityById(resources.getId(), () -> localStorageRepository.findById(resources.getId()).orElseGet(LocalStorage::new), "LocalStorage");
         localStorage.copy(resources);
         localStorageRepository.save(localStorage);
     }
@@ -109,7 +107,7 @@ public class LocalStorageServiceImpl implements LocalStorageService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteAll(Long[] ids) {
         for (Long id : ids) {
-            LocalStorage storage = localStorageRepository.findById(id).orElseGet(LocalStorage::new);
+            LocalStorage storage = ValidationUtil.getEntityById(id, () -> localStorageRepository.findById(id).orElseGet(LocalStorage::new), "LocalStorage");
             FileUtil.del(storage.getPath());
             localStorageRepository.delete(storage);
         }

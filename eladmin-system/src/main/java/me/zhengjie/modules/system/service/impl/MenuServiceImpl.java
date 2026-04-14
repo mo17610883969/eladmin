@@ -91,8 +91,7 @@ public class MenuServiceImpl implements MenuService {
         String key = CacheKey.MENU_ID + id;
         Menu menu = redisUtils.get(key, Menu.class);
         if(menu == null){
-            menu = menuRepository.findById(id).orElseGet(Menu::new);
-            ValidationUtil.isNull(menu.getId(),"Menu","id",id);
+            menu = ValidationUtil.getEntityById(id, () -> menuRepository.findById(id).orElseGet(Menu::new), "Menu");
             redisUtils.set(key, menu, 1, TimeUnit.DAYS);
         }
         return menuMapper.toDto(menu);
@@ -149,8 +148,7 @@ public class MenuServiceImpl implements MenuService {
         if(resources.getId().equals(resources.getPid())) {
             throw new BadRequestException("上级不能为自己");
         }
-        Menu menu = menuRepository.findById(resources.getId()).orElseGet(Menu::new);
-        ValidationUtil.isNull(menu.getId(),"Permission","id",resources.getId());
+        Menu menu = ValidationUtil.getEntityById(resources.getId(), () -> menuRepository.findById(resources.getId()).orElseGet(Menu::new), "Menu");
 
         if(resources.getIFrame()){
             if (!(resources.getPath().toLowerCase().startsWith(HTTP_PRE)||resources.getPath().toLowerCase().startsWith(HTTPS_PRE))) {
@@ -312,9 +310,7 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     public Menu findOne(Long id) {
-        Menu menu = menuRepository.findById(id).orElseGet(Menu::new);
-        ValidationUtil.isNull(menu.getId(),"Menu","id",id);
-        return menu;
+        return ValidationUtil.getEntityById(id, () -> menuRepository.findById(id).orElseGet(Menu::new), "Menu");
     }
 
     @Override

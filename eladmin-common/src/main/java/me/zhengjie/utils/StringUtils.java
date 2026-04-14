@@ -24,9 +24,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.UnknownHostException;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Enumeration;
+import java.util.*;
 
 /**
  * @author Zheng Jie
@@ -191,6 +189,33 @@ public class StringUtils extends org.apache.commons.lang3.StringUtils {
             w = 0;
         }
         return weekDays[w];
+    }
+
+    /**
+     * 按中英文逗号分割字符串
+     *
+     * @param str 要分割的字符串
+     * @return 分割后的字符串数组
+     */
+    public static String[] splitByComma(String str) {
+        if (isBlank(str)) {
+            return new String[0];
+        }
+        return str.split("[,，]");
+    }
+
+    /**
+     * 按中英文逗号分割字符串并转为List
+     *
+     * @param str 要分割的字符串
+     * @return 分割后的字符串列表
+     */
+    public static List<String> splitByCommaToList(String str) {
+        String[] arr = splitByComma(str);
+        if (arr.length == 0) {
+            return Collections.emptyList();
+        }
+        return Arrays.asList(arr);
     }
 
     /**

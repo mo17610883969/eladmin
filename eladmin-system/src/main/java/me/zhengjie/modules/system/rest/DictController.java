@@ -26,6 +26,7 @@ import me.zhengjie.modules.system.service.dto.DictDto;
 import me.zhengjie.modules.system.service.dto.DictQueryCriteria;
 import me.zhengjie.utils.PageResult;
 import me.zhengjie.utils.PageUtil;
+import me.zhengjie.utils.ValidationUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -76,9 +77,7 @@ public class DictController {
     @PostMapping
     @PreAuthorize("@el.check('dict:add')")
     public ResponseEntity<Object> createDict(@Validated @RequestBody Dict resources){
-        if (resources.getId() != null) {
-            throw new BadRequestException("A new "+ ENTITY_NAME +" cannot already have an ID");
-        }
+        ValidationUtil.validateNewEntity(resources.getId(), ENTITY_NAME);
         dictService.create(resources);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }

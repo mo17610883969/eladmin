@@ -34,8 +34,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.quartz.QuartzJobBean;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Future;
 
 /**
  * 参考人人开源，<a href="https://gitee.com/renrenio/renren-security">...</a>
@@ -84,7 +86,7 @@ public class ExecutionJob extends QuartzJobBean {
             logger.info("任务执行成功，任务名称：{}, 执行时间：{}毫秒", quartzJob.getJobName(), times);
             // 判断是否存在子任务
             if(StringUtils.isNotBlank(quartzJob.getSubTask())){
-                String[] tasks = quartzJob.getSubTask().split("[,，]");
+                String[] tasks = StringUtils.splitByComma(quartzJob.getSubTask());
                 // 执行子任务
                 quartzJobService.executionSubJob(tasks);
             }
@@ -126,7 +128,7 @@ public class ExecutionJob extends QuartzJobBean {
         TemplateEngine engine = TemplateUtil.createEngine(new TemplateConfig("template", TemplateConfig.ResourceMode.CLASSPATH));
         Template template = engine.getTemplate("taskAlarm.ftl");
         emailVo.setContent(template.render(data));
-        List<String> emails = Arrays.asList(quartzJob.getEmail().split("[,，]"));
+        List<String> emails = StringUtils.splitByCommaToList(quartzJob.getEmail());
         emailVo.setTos(emails);
         return emailVo;
     }

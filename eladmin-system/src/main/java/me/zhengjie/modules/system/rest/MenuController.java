@@ -31,6 +31,7 @@ import me.zhengjie.modules.system.service.mapstruct.MenuMapper;
 import me.zhengjie.utils.PageResult;
 import me.zhengjie.utils.PageUtil;
 import me.zhengjie.utils.SecurityUtils;
+import me.zhengjie.utils.ValidationUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -124,9 +125,7 @@ public class MenuController {
     @PostMapping
     @PreAuthorize("@el.check('menu:add')")
     public ResponseEntity<Object> createMenu(@Validated @RequestBody Menu resources){
-        if (resources.getId() != null) {
-            throw new BadRequestException("A new "+ ENTITY_NAME +" cannot already have an ID");
-        }
+        ValidationUtil.validateNewEntity(resources.getId(), ENTITY_NAME);
         menuService.create(resources);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }

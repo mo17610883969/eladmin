@@ -83,8 +83,7 @@ public class RoleServiceImpl implements RoleService {
         String key = CacheKey.ROLE_ID + id;
         Role role = redisUtils.get(key, Role.class);
         if (role == null) {
-            role = roleRepository.findById(id).orElseGet(Role::new);
-            ValidationUtil.isNull(role.getId(), "Role", "id", id);
+            role = ValidationUtil.getEntityById(id, () -> roleRepository.findById(id).orElseGet(Role::new), "Role");
             redisUtils.set(key, role, 1, TimeUnit.DAYS);
         }
         return roleMapper.toDto(role);
@@ -102,8 +101,7 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Role resources) {
-        Role role = roleRepository.findById(resources.getId()).orElseGet(Role::new);
-        ValidationUtil.isNull(role.getId(), "Role", "id", resources.getId());
+        Role role = ValidationUtil.getEntityById(resources.getId(), () -> roleRepository.findById(resources.getId()).orElseGet(Role::new), "Role");
 
         Role role1 = roleRepository.findByName(resources.getName());
 

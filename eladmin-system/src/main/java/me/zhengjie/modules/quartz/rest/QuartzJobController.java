@@ -27,6 +27,7 @@ import me.zhengjie.modules.quartz.service.QuartzJobService;
 import me.zhengjie.modules.quartz.service.dto.JobQueryCriteria;
 import me.zhengjie.utils.PageResult;
 import me.zhengjie.utils.SpringBeanHolder;
+import me.zhengjie.utils.ValidationUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -84,9 +85,7 @@ public class QuartzJobController {
     @PostMapping
     @PreAuthorize("@el.check('timing:add')")
     public ResponseEntity<Object> createQuartzJob(@Validated @RequestBody QuartzJob resources){
-        if (resources.getId() != null) {
-            throw new BadRequestException("A new "+ ENTITY_NAME +" cannot already have an ID");
-        }
+        ValidationUtil.validateNewEntity(resources.getId(), ENTITY_NAME);
         // 验证Bean是不是合法的，合法的定时任务 Bean 需要用 @Service 定义
         checkBean(resources.getBeanName());
         quartzJobService.create(resources);

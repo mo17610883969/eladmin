@@ -70,9 +70,7 @@ public class QuartzJobServiceImpl implements QuartzJobService {
 
     @Override
     public QuartzJob findById(Long id) {
-        QuartzJob quartzJob = quartzJobRepository.findById(id).orElseGet(QuartzJob::new);
-        ValidationUtil.isNull(quartzJob.getId(),"QuartzJob","id",id);
-        return quartzJob;
+        return ValidationUtil.getEntityById(id, () -> quartzJobRepository.findById(id).orElseGet(QuartzJob::new), "QuartzJob");
     }
 
     @Override
@@ -92,7 +90,7 @@ public class QuartzJobServiceImpl implements QuartzJobService {
             throw new BadRequestException("cron表达式格式错误");
         }
         if(StringUtils.isNotBlank(resources.getSubTask())){
-            List<String> tasks = Arrays.asList(resources.getSubTask().split("[,，]"));
+            List<String> tasks = StringUtils.splitByCommaToList(resources.getSubTask());
             if (tasks.contains(resources.getId().toString())) {
                 throw new BadRequestException("子任务中不能添加当前任务ID");
             }
